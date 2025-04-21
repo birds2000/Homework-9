@@ -1,0 +1,263 @@
+---
+title: "Homework 9"
+author: "Bird Smith -- kbs2529"
+date: "2025-04-21"
+output:
+  pdf_document: default
+  html_document: default
+---
+[Github Link](https://github.com/birds2000/Homework-9)
+
+```{r, include=FALSE}
+library(tidyverse)
+library(dplyr)
+library(kableExtra)
+library(stringr)
+library(ggplot2)
+library(moderndive)
+```
+
+# Problem 1: Manufacturing flaws in circuit boards
+
+```{r, echo=FALSE}
+solder <- read.csv("solder.csv")
+```
+
+## Part A:
+
+```{r, echo=FALSE}
+#Plot 1
+opening.plot <- ggplot(solder, aes(x = Opening, y= skips)) +
+  geom_boxplot(fill = "lightpink") + 
+  labs(title = "Relationship between Opening Size and Number of Skips", x = "Opening Size on Solder Gun", y = "Number of Solder Skips") + 
+  theme_minimal()
+print(opening.plot)
+```
+
+Figure 1: The plot shows that larger opening sizes tend to result in fewer solder skips (manufacturing flaws), with 'Large' openings showing the lowest median number of skips compared to 'Medium' and 'Small' openings; the latter, by far, contains the highest number. 
+ 
+```{r, echo=FALSE}
+#Plot 2
+solder.plot <- ggplot(solder, aes(x = Solder, y = skips)) + 
+  geom_boxplot(fill = "lightgreen") + 
+  labs(title = "Relationship between Solder Thickness and Number of Skips", x = "Solder Thickness", y = "Number of Solder Skips") + 
+  theme_minimal()
+print(solder.plot)
+```
+
+Figure 2: The plot demonstrates that thin solder generally results in more skips compared to thick solder, suggesting that solder thickness is a significant factor in manufacturing reliability.
+
+## Part B:
+
+```{r, echo=FALSE}
+#Regression model
+solder.model <- lm(skips ~ Opening + Solder + Opening:Solder, data = solder)
+solder.coef.table <- get_regression_table(solder.model)
+solder.coef.table.form <- kable(solder.coef.table, caption = "Regression Model Coefficients with 95% Confidence Intervals", format = "markdown")
+print(solder.coef.table.form)
+```
+
+## Part C: 
+Intercept = 0.393
+
+With a large opening and thick solder, we predict about 0.393 skips on average.
+
+Medium opening = 2.407
+
+Holding solder thickness at “thick,” switching from a large to a medium opening adds roughly 2.41 skips.
+
+Small opening = 5.127
+
+Holding solder thickness at “thick,” switching from a large to a small opening adds roughly 5.13 skips.
+
+Thin solder = 2.280
+
+With a large opening, using thin instead of thick solder increases the expected skips by about 2.28.
+
+Medium opening * thin solder = –0.740
+
+When you combine a medium opening with thin solder, you get about 0.74 fewer skips than you’d predict by simply adding the separate “medium opening” and “thin solder” effects.
+
+Small opening * thin solder = 9.653
+
+When you combine a small opening with thin solder, you see about 9.65 more skips than the sum of the individual “small opening” and “thin solder” effects.
+
+## Part D:
+
+```{r, echo=FALSE}
+opening.levels <- levels(factor(solder$Opening))
+solder.levels <- levels(factor(solder$Solder))
+combinations <- expand.grid(Opening = opening.levels, Solder = solder.levels)
+combinations$predicted_skips <- predict(solder.model, newdata = combinations)
+best.combination <- combinations[order(combinations$predicted_skips), ] [1, ]
+```
+
+The recommended combination for minimum skips is a large opening, thick solder, and is predicted to have 0.393 skips.
+
+*********************
+
+# Problem 2: Grocery store prices
+
+```{r, echo=FALSE}
+groceries <- read.csv("groceries.csv")
+```
+
+## Part A:
+
+```{r, echo=FALSE}
+store.avg.prices <- aggregate(Price ~ Store, data = groceries, FUN = mean, na.rm = TRUE)
+store.avg.prices <- store.avg.prices[order(-store.avg.prices$Price), ]
+
+#Bar plot
+store.price.plot <- ggplot(store.avg.prices, aes(x = reorder(Store, Price), y = Price)) + 
+  geom_bar(stat = "identity", fill = "steelblue") + 
+  coord_flip() + 
+  labs(title = "Average Product Price by Store", x = "Store", y = "Average Price (in USD $)") + 
+  theme_minimal()
+print(store.price.plot)
+```
+
+Figure 3: Average prices across stores show significant variation, with convenience stores and high-end grocery stores generally charging higher prices. However, this comparison doesn't account for different product selection across stores.
+ 
+## Part B:
+
+```{r, echo=FALSE}
+product.counts <- table(groceries$Product)
+product.availability <- data.frame(
+  Product = names(product.counts),
+  num_stores = as.numeric(product.counts)
+)
+product.availability <- product.availability[order(-product.availability$num_stores), ]
+
+#Bar plot
+product.avail.plot <- ggplot(product.availability, aes(x = reorder(Product, num_stores), y = num_stores)) + 
+  geom_bar(stat = "identity", fill = "coral") + 
+  coord_flip() +
+  labs(title = "Number of Stores Selling Each Product", x = "Product", y = "Number of Stores") +
+  theme_minimal()
+print(product.avail.plot)
+```
+
+Figure 4: Products vary widely in availability across stores. Basic staples like eggs and milk are available in all 16, while specialty products (cereals, nut butter substitutes, etc.) are carried by fewer retailers. The uneven product distributions affects price comparisons between stores.
+
+## Part C:
+
+```{r, echo=FALSE}
+groceries.model <- lm(Price ~ Product + Type, data = groceries)
+groceries.ci <- confint(groceries.model)
+gro.index <- which(rownames(groceries.ci) == "TypeGrocery")
+gro.ci <- groceries.ci[gro.index, ]
+```
+
+According to our model, the additional charge at convenience stores compared to regular grocery stores falls somewhere between `r round(gro.ci[1], 2)` and `r round(gro.ci[2], 2)` dollars, with 95% confidence.
+
+## Part D:
+
+```{r, echo=FALSE}
+store.model <- lm(Price ~ Product + Store, data = groceries)
+store.coefs <- summary(store.model)$coefficients
+store.rows <- grep("Store", rownames(store.coefs))
+store.effects <- data.frame(
+  Store = gsub("Store", "", rownames(store.coefs)[store.rows]),
+  Coefficient = store.coefs[store.rows, "Estimate"]
+)
+
+store.effects.sorted <- store.effects[order(store.effects$Coefficient), ]
+lowest.stores <- store.effects.sorted[1:2, ]
+highest.stores <- store.effects.sorted[(nrow(store.effects.sorted)-1):nrow(store.effects.sorted), ]
+```
+
+Stores with lowest prices (controlling for product): `r (lowest.stores)`
+
+Stores with the highest prices (controlling for product): `r (highest.stores)`
+
+## Part E:
+
+```{r, echo=FALSE}
+heb.row <- which(store.effects$Store == "H-E-B ")
+cm.row <- which(store.effects$Store == "Central Market")
+heb.coef <- store.effects$Coefficient[heb.row]
+cm.coef <- store.effects$Coefficient[cm.row]
+```
+
+HEB coefficient: `r round(heb.coef, 3)`
+
+Central Market coefficient: `r round(cm.coef, 3)`
+
+Difference: `r round((cm.coef - heb.coef), 3)`
+
+## Part F:
+
+```{r, echo=FALSE}
+groceries$Income10K <- groceries$Income / 10000
+income.model <- lm(Price ~ Product + Income10K, data = groceries)
+income.summary <- summary(income.model)
+income.coef <- income.summary$coefficients["Income10K", "Estimate"]
+income.sign <- ifelse(income.coef > 0, "more", "less")
+sd.income <- sd(groceries$Income10K, na.rm = TRUE)
+sd.price <- sd(groceries$Price)
+sd.coef <- income.coef * (sd.income / sd.price)
+```
+
+Based on the "Income10K" coefficient `r (income.coef)`, consumers in poorer zip codes pay `r (income.sign)` for the same product on average.
+
+A one-SD increase in the income of a zip code seems to be associated with a `r round(sd.coef, 3)` SD change in the price that consumers in that zip code expect to pay for the same product.
+
+*********************
+
+# Problem 3: Redlining
+
+```{r, echo=FALSE}
+redlining <- read.csv("redlining.csv")
+```
+
+## Statement A: 
+
+```{r, echo=FALSE}
+model_A <- lm(policies ~ minority, data = redlining)
+ci_A     <- confint(model_A)["minority", ]
+```
+
+Coefficient for minority: `r round(coef(model_A)["minority"], 3)`
+
+95% CI: `r round(ci_A[1], 3)` to `r round(ci_A[2], 3)`
+
+True: the scatter plot shows a positive relationship between minority percentage and FAIR policies.
+
+## Statement B: 
+
+```{r, echo=FALSE}
+age.int.model <- lm(policies ~ minority * age, data = redlining)
+model_coefs <- summary(age.int.model)$coefficients
+kable(
+  model_coefs,
+  digits   = 3,
+  caption  = "Interaction Model",
+  col.names = c("Estimate", "Std. Error", "t value", "Pr(>|t|)")
+)
+```
+
+False: there is not strong evidence of an interaction between minority % and housing age. Model_B shows a weak, non-significant relationship between housing age and minority % (p = 0.125), and no other model is presented to us that tests for an interaction between the two values to predict FAIR policies. 
+
+
+## Statement C: 
+
+```{r, echo=FALSE}
+redlining$fire_risk <- ifelse(redlining$fire > median(redlining$fire), "High", "Low")
+```
+
+False: Main effect of minority = 0.010 (SE = 0.004), p = 0.015
+
+Interaction term (minority:fire_riskLow) = –0.001 (SE = 0.006), p = 0.839
+
+95% CI for the interaction: [–0.012, 0.010]
+
+The non‑significant interaction (and CI spanning zero) shows no difference in the minority/policies slope between High and Low fire‑risk groups.
+
+## Statement D:
+
+False: In model_D2 with income control, the minority coefficient is 0.01 but remains statistically significant (as opposed to earlier value of 0.014). The 95% CI = [0.004, 0.015]. My finding is that income reduces but does not eliminate the minority association.
+
+## Statement E: 
+
+True: after controlling for income, fire risk, and housing age, the minority coefficient is 0.008 (95% CI: 0.003 to 0.014). Higher % minority zip codes are associated with more FAIR policies. 
